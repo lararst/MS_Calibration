@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=mean_400
+#SBATCH --job-name=simulation_4_mean
 #SBATCH -o /output/out
 #SBATCH --export=ALL
 #SBATCH --partition=cpu-zen4
