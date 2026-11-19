@@ -1,0 +1,221 @@
+source("/old-code/z_functions.R")
+source("/z_functions_true_transition_probs.R")
+source("/z_load_packages.R")
+###
+### This program will create plots for the small sample analysis, moderate calibration
+###
+
+### Load the true calibration data
+true.calib <- readRDS(paste("/true.calib.lineplot.rcs.nk", 4, ".rds", sep = ""))
+
+### reorder lists 
+listord<- function(lst){
+  ord <- vector("list", 3)
+  for (i in 1:3){
+    ord[[i]] <- vector("list", 1000)
+  }
+  for (sim in 1:1000) {
+    for (j in 1:3) {
+      ord[[j]][[sim]] <- lst[[sim]][[j]]
+    }
+  }
+  return(ord)
+}
+
+### Function: keep only complete simulations and trim
+clean_trim_limit <- function(lst, validsamp){
+  
+  valid <- lst[validsamp]
+  
+  valid <- lapply(seq_along(valid), function(i){
+    
+    lapply(valid[[i]], function(df){
+      
+      out <- df[1:min(500, nrow(df)), , drop = FALSE]
+      out$plot <- i
+      out
+      
+    })
+    
+  })
+  
+  return(valid)
+}
+
+
+### This function will create the plots
+create_plots_moderate_small_sample <- function(scen, scen.tp, n.cohort, n.pctls){
+  
+  ### Load the calibration plot data
+  load(paste("/mod_", n.cohort, "/", n.pctls, "pctl/small_sample_moderate_analysis_", scen, "_n", n.cohort, "_npctls", n.pctls, ".RData", sep = ""))
+  #source("code/z_functions.R", local = TRUE)
+  
+  ### Reduce true.calib to scenario of interest
+  true_calib_sc <- lapply( 1:5, function(x) true.calib[[scen.tp]][[x]])
+  
+  #reorder lists
+  calib.pv.mod.list <- listord(calib.pv.mod.list)
+  calib.blr.mod.list <- listord(calib.blr.mod.list)
+  calib.mlr.mod.list <- listord(calib.mlr.mod.list)
+  ### Reduce to scep.tp data
+  pv_list_tp <- calib.pv.mod.list[[scen.tp]]
+  blr_list_tp <- calib.blr.mod.list[[scen.tp]]
+  mlr_list_tp <- calib.mlr.mod.list[[scen.tp]]
+  
+  #Common valid simulations across all methods
+  pv_keep  <- which(!sapply(pv_list_tp, is.null))
+  blr_keep <- which(!sapply(blr_list_tp, is.null))
+  mlr_keep <- which(!sapply(mlr_list_tp, is.null))
+  
+  common_keep <- Reduce(
+    intersect,
+    list(pv_keep, blr_keep, mlr_keep)
+  )
+  
+  if(length(common_keep) < 200){
+    stop("Fewer than 200 common valid simulations.")
+  }
+  
+  set.seed(1)
+  validsamp <- sample(common_keep, 200)
+  
+  
+  pv_list_tp  <- clean_trim_limit(pv_list_tp, validsamp)
+  blr_list_tp <- clean_trim_limit(blr_list_tp, validsamp)
+  mlr_list_tp <- clean_trim_limit(mlr_list_tp, validsamp)
+  
+  ### Now want to concatenate into a single data for each state
+  pv_list_tp <- lapply(1:5, function(x) {do.call("rbind", lapply(pv_list_tp, function(y) {y[[x]]}))})
+  blr_list_tp <- lapply(1:5, function(x) {do.call("rbind", lapply(blr_list_tp, function(y) {y[[x]]}))})
+  mlr_list_tp <- lapply(1:5, function(x) {do.call("rbind", lapply(mlr_list_tp, function(y) {y[[x]]}))})
+  
+  common.cols <- c("id", "pred", "obs", "plot")
+  
+  ### Add the true calibration data
+  #calib.pv.mod.list.comb <- lapply(1:5, function(x) {
+  #rbind(calib.pv.mod.list.comb[[x]], data.frame(true.calib[[x]][,c("id", "pred", "obs")], "plot" = 0))})
+  
+  pv_list_tp <- lapply(1:5, function(x) {
+    
+    sim.df <- pv_list_tp[[x]][, common.cols]
+    
+    true.df <- data.frame(
+      true_calib_sc[[x]][, c("id", "pred", "obs")],
+      plot = 0
+    )
+    
+    rbind(sim.df, true.df)
+  })
+  
+  blr_list_tp <- lapply(1:5, function(x) {
+    
+    sim.df <- blr_list_tp[[x]][, common.cols]
+    
+    true.df <- data.frame(
+      true_calib_sc[[x]][, c("id", "pred", "obs")],
+      plot = 0
+    )
+    
+    rbind(sim.df, true.df)
+  })
+  
+  mlr_list_tp <- lapply(1:5, function(x) {
+    
+    sim.df <- mlr_list_tp[[x]][, common.cols]
+    
+    true.df <- data.frame(
+      true_calib_sc[[x]][, c("id", "pred", "obs")],
+      plot = 0
+    )
+    
+    rbind(sim.df, true.df)
+  })
+  
+  #calib.blr.mod.list.comb <- lapply(1:5, function(x) {
+  #rbind(calib.blr.mod.list.comb[[x]], data.frame(true.calib[[x]][,c("id", "pred", "obs")], "plot" = 0))})
+  #calib.mlr.mod.list.comb <- lapply(1:5, function(x) {
+  #rbind(calib.mlr.mod.list.comb[[x]], data.frame(true.calib[[x]][,c("id", "pred", "obs")], "plot" = 0))})
+  
+  ### Create calibration plots
+  
+  ### Pseudo-value
+  calib.plots.pv <- 
+    plot_calib_msm_small_sample(pv_list_tp, 
+                                calib.type = "line",
+                                marg.density = TRUE, 
+                                marg.density.size = 8, 
+                                ncol = 5, 
+                                nrow = 1, 
+                                inclu.legend = TRUE,
+                                legend.seperate = TRUE,
+                                legend.title = "Line plots: ",
+                                inclu.title = TRUE,
+                                axis.titles.x = 0,
+                                axis.titles.y = 1, 
+                                axis.titles.text.y = "Pseudo-value\nObserved risk",
+                                size = 16)
+  
+  ### BLR-IPCW
+  calib.plots.blr <- 
+    plot_calib_msm_small_sample(blr_list_tp, 
+                                calib.type = "line",
+                                marg.density = TRUE, 
+                                marg.density.size = 8, 
+                                ncol = 5, 
+                                nrow = 1, 
+                                inclu.legend = FALSE,
+                                inclu.title = FALSE,
+                                axis.titles.text.x = "Predicted risk",
+                                axis.titles.y = 1, 
+                                axis.titles.text.y = "BLR-IPCW\nObserved risk",
+                                size = 16)
+  
+  #   ### MLR-IPCW
+  calib.plots.mlr <- 
+    plot_calib_msm_small_sample(mlr_list_tp, 
+                                calib.type = "scatter",
+                                marg.density = TRUE, 
+                                marg.density.size = 8, 
+                                ncol = 5, 
+                                nrow = 1, 
+                                inclu.legend = TRUE,
+                                legend.seperate = TRUE,
+                                legend.title = "Scatter plots: ",
+                                inclu.title = FALSE,
+                                axis.titles.x = 0,
+                                axis.titles.y = 1, 
+                                axis.titles.text.y = "MLR-IPCW\nObserved risk",
+                                size = 16)
+  
+  ### Combine into a single plot for the Figure
+  #plots.fig <- gridExtra::arrangeGrob(calib.plots.pv[["plots"]], calib.plots.blr, 
+  #                                    calib.plots.pv[["legend"]],
+  #                                    nrow = 3, heights = c(1, 1, 0.05))
+  
+  plots.fig <- gridExtra::arrangeGrob(calib.plots.pv[["plots"]], calib.plots.blr, calib.plots.mlr[["plots"]], 
+                                      gridExtra::arrangeGrob(calib.plots.pv[["legend"]], calib.plots.mlr[["legend"]], ncol = 2),
+                                      nrow = 4, heights = c(1, 1, 1, 0.12))
+  
+  
+  #CairoPNG(paste("/mod_",n.cohort,"/small_sample_moderate_", scen, "_tp", scen.tp, "_N", n.cohort, ".png", sep = ""), width = 20, height = 10, unit = "in", res = 150)
+  CairoPNG(paste("/small_sample_moderate_", scen, "_tp", scen.tp, "_N", n.cohort, ".png", sep = ""), width = 20, height = 10, unit = "in", res = 150)
+  grid::grid.draw(plots.fig)
+  dev.off()
+  #CairoPDF(paste("/mod_",n.cohort,"/small_sample_moderate_", scen,  "_tp", scen.tp,  "_N", n.cohort, ".pdf", sep = ""), width = 20, height = 10)
+  CairoPDF(paste("/small_sample_moderate_", scen,  "_tp", scen.tp,  "_N", n.cohort, ".pdf", sep = ""), width = 20, height = 10)
+  grid::grid.draw(plots.fig)
+  dev.off()
+  
+}
+
+lapply(c("C1","C2","C3","C4","C5","C6","C7"), function(x) {lapply(1:3, function(y) {create_plots_moderate_small_sample(x, y, 400, 10)})})
+lapply(c("C1","C2","C3","C4","C5","C6","C7"), function(x) {lapply(1:3, function(y) {create_plots_moderate_small_sample(x, y, 500, 10)})})
+lapply(c("C1","C2","C3","C4","C5","C6","C7"), function(x) {lapply(1:3, function(y) {create_plots_moderate_small_sample(x, y, 700, 10)})})
+
+
+
+
+
+
+
+
